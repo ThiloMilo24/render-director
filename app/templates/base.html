@@ -1,0 +1,118 @@
+{# Layout-Shell für die Render-Director-Webapp.
+
+   - Tailwind via Play-CDN: kein Build-Step nötig, MVP-tauglich (Tailwind
+     selbst empfiehlt CLI-Build erst für Production-Deployment).
+   - htmx via unpkg: Server-rendered HTML-Snippets pro Interaktion.
+   - Layout: zwei Spalten (Sidebar links 280px, Main-Pane füllend) +
+     schlanker Header.
+
+   Wird vom pyRevit-`[Render Tool]`-Button später im Chrome-`--app`-Modus
+   auf der rechten Bildschirmhälfte geöffnet — Layout ist deshalb auch
+   in schmalen Viewports lesbar (Tailwind-Defaults reichen für jetzt). #}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Render Director{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <style>
+    /* Tailwind-Theme-Erweiterung inline — bewusst zurückhaltend und
+       markenneutral. */
+    [x-cloak] { display: none !important; }
+  </style>
+</head>
+<body class="h-screen bg-slate-50 text-slate-900 antialiased">
+  <div class="flex h-full flex-col">
+    <header class="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2 shadow-sm">
+      <div class="flex items-center gap-2">
+        {# Wortmarke statt Logo — das Tool ist markenneutral. #}
+        <span class="inline-flex h-8 w-8 items-center justify-center rounded bg-slate-900 text-sm font-semibold text-white">RD</span>
+        <h1 class="text-base font-semibold tracking-tight">Render Director</h1>
+        {% if mock_mode %}
+        <span class="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-800"
+              title="RENDER_MOCK_PROVIDERS ist aktiv: statische Antworten, keine API-Calls">Mock</span>
+        {% endif %}
+      </div>
+      {# Tab-Switch: Snapshots (BIM/Revit-getrieben) vs Ad-hoc (Bild-Drop).
+         Beide bleiben URL-driven, damit Reload / Back-Button funktionieren. #}
+      {% set _active = active_tab|default("snapshots") %}
+      {% set _pd_qs = ("?project_dir=" ~ project_dir|urlencode) if project_dir else "" %}
+      <nav class="flex items-center gap-1 text-xs">
+        <a
+          href="/{{ _pd_qs }}"
+          data-active="{{ 'true' if _active == 'snapshots' else 'false' }}"
+          class="rounded-md px-3 py-1.5 font-medium transition
+                 hover:bg-slate-100
+                 data-[active=true]:bg-slate-900 data-[active=true]:text-white
+                 data-[active=false]:text-slate-600"
+        >{{ t("nav.snapshots") }}</a>
+        <a
+          href="/adhoc{{ _pd_qs }}"
+          data-active="{{ 'true' if _active == 'adhoc' else 'false' }}"
+          class="rounded-md px-3 py-1.5 font-medium transition
+                 hover:bg-slate-100
+                 data-[active=true]:bg-slate-900 data-[active=true]:text-white
+                 data-[active=false]:text-slate-600"
+        >{{ t("nav.adhoc") }}</a>
+        <a
+          href="/cost"
+          data-active="{{ 'true' if _active == 'cost' else 'false' }}"
+          class="rounded-md px-3 py-1.5 font-medium transition
+                 hover:bg-slate-100
+                 data-[active=true]:bg-slate-900 data-[active=true]:text-white
+                 data-[active=false]:text-slate-600"
+        >{{ t("nav.cost") }}</a>
+      </nav>
+      <div class="flex items-center gap-3">
+        {# UI-Sprach-Umschalter: setzt das ui_lang-Cookie via /set-language.
+           Bewusst ausserhalb <nav> (der Nav-Guard soll die zwei nicht als
+           „neues Fenster“ behandeln). #}
+        <div class="flex items-center gap-0.5 text-[11px] font-medium" title="{{ t('nav.language') }}">
+          <a href="/set-language/de"
+             class="rounded px-1.5 py-0.5 {% if ui_lang == 'de' %}bg-slate-900 text-white{% else %}text-slate-500 hover:bg-slate-100{% endif %}">DE</a>
+          <a href="/set-language/it"
+             class="rounded px-1.5 py-0.5 {% if ui_lang == 'it' %}bg-slate-900 text-white{% else %}text-slate-500 hover:bg-slate-100{% endif %}">IT</a>
+        </div>
+        <div class="text-xs text-slate-500">
+          {% block header_status %}localhost:8765{% endblock %}
+        </div>
+      </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+      <aside class="w-60 shrink-0 overflow-y-auto border-r border-slate-200 bg-white">
+        {% block sidebar %}
+        <div class="p-4 text-sm text-slate-400"></div>
+        {% endblock %}
+      </aside>
+
+      <main class="flex-1 overflow-y-auto">
+        {% block main %}
+        <div class="flex h-full items-center justify-center text-sm text-slate-400"></div>
+        {% endblock %}
+      </main>
+    </div>
+  </div>
+
+  {# Nav-Guard: Ein voller Seitenwechsel (Tab-Klick) würde eine gerade
+     laufende Generierung abbrechen und das Ergebnis-Bubble verwerfen. Solange
+     ein htmx-Request in flight ist (.htmx-request im DOM), öffnen die Header-
+     Tabs deshalb ein NEUES Fenster, statt wegzunavigieren — der laufende
+     Render bleibt erhalten (man kann so z.B. die Kosten während des Renders
+     ansehen). Ohne laufenden Request navigieren die Tabs ganz normal. #}
+  <script>
+    (function () {
+      document.querySelectorAll('header nav a[href]').forEach(function (a) {
+        a.addEventListener('click', function (ev) {
+          if (document.querySelector('.htmx-request')) {
+            ev.preventDefault();
+            window.open(a.href, '_blank', 'noopener');
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

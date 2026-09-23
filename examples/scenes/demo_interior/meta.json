@@ -1,0 +1,20 @@
+{
+  "project_name": "Demo House",
+  "project_type": "Wohnbau",
+  "location": "Innsbruck, Österreich (fiktiver Standort)",
+  "facade_orientation": "Nord (Hauptfenster)",
+  "materials": {
+    "Wandbelag": "Kalkputz warmweiß",
+    "Deckenfinish": "Lärchen-Schalung sichtbar, geölt",
+    "Bodenbelag": "Eiche breitdielig, geölt",
+    "Möbel": "Sofa Naturleinen, Beistelltisch massiv Eiche",
+    "Fensterleibung": "Eiche, tief"
+  },
+  "camera_focal_length_mm": 24.0,
+  "camera_height_m": 1.6,
+  "time_of_day": "Frühabend",
+  "view_type": "interior",
+  "program_type": "wohnraum",
+  "furniture_state": "placeholder",
+  "notes": "Synthetische Demo-Szene (scripts/make_demo_assets.py). Graue Figur = Enscape-Mannequin."
+}

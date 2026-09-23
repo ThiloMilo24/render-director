@@ -1,0 +1,17 @@
+{# Platzhalter für die Zwei-Phasen-Anzeige: erscheint direkt nach dem Bild
+   (Phase 1) und lädt beim Einfügen automatisch die Bewertung nach (Phase 2:
+   Validator + Advisor + Score) via `validate_url`, das Ergebnis (der Score-
+   Block) ersetzt diesen Platzhalter. Erwartet `validate_url` + `result.run_dir`. #}
+<div class="validate-slot flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500"
+     hx-post="{{ validate_url }}"
+     hx-trigger="load"
+     hx-swap="outerHTML"
+     hx-target="this"
+     hx-include="find input">
+  <input type="hidden" name="run_dir" value="{{ result.run_dir }}" />
+  <svg class="h-3.5 w-3.5 shrink-0 animate-spin text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+  </svg>
+  <span>{{ t("bubble.validating") }}</span>
+</div>

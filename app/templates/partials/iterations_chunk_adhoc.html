@@ -1,0 +1,20 @@
+{# Ad-hoc-Iterations-Chunk — analog zu iterations_chunk_snapshot, aber
+   referenziert /ui/adhoc/older und nutzt das chat_adhoc_iteration-
+   Bubble-Template. Tag-Filter wird ueber `active_tag` propagiert. #}
+{% if has_more_older and past_iterations %}
+<div class="flex justify-center">
+  <button
+    type="button"
+    hx-get="/ui/adhoc/older?before={{ past_iterations[0].run_id|urlencode }}{% if active_tag %}&tag={{ active_tag|urlencode }}{% endif %}"
+    hx-target="this"
+    hx-swap="outerHTML"
+    hx-disabled-elt="this"
+    class="rounded-full border border-slate-300 bg-white px-4 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+  >↑ Ältere Iterationen anzeigen</button>
+</div>
+{% endif %}
+{% for it in past_iterations %}
+  {% with result=it, user_prompt=it.user_prompt, user_feedback=it.user_feedback, mode=it.mode, validator_language=it.validator_language, generator_model=it.generator_model, generator_thinking_budget=it.generator_thinking_budget %}
+    {% include "partials/chat_adhoc_iteration.html" %}
+  {% endwith %}
+{% endfor %}

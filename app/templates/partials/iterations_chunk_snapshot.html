@@ -1,0 +1,22 @@
+{# Snapshot-Iterations-Chunk — rendert den "Ältere anzeigen"-Button (falls
+   mehr verfuegbar) und dann die Iterationen oldest→newest. Wird einmal
+   beim initialen Page-Load und dann jeweils beim Klick auf den Button
+   ausgeliefert. htmx hx-swap=outerHTML auf dem Button → ersetzt sich
+   selbst durch (neuer-Button + naechstes Iterations-Paket). #}
+{% if has_more_older and past_iterations %}
+<div class="flex justify-center">
+  <button
+    type="button"
+    hx-get="/ui/snapshot/{{ snapshot_view }}/older?before={{ past_iterations[0].result.run_id|urlencode }}{% if project_dir %}&project_dir={{ project_dir|urlencode }}{% endif %}"
+    hx-target="this"
+    hx-swap="outerHTML"
+    hx-disabled-elt="this"
+    class="rounded-full border border-slate-300 bg-white px-4 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+  >↑ Ältere Iterationen anzeigen</button>
+</div>
+{% endif %}
+{% for it in past_iterations %}
+  {% with result=it.result, result_url=it.result_url, user_prompt=it.user_prompt, user_feedback=it.user_feedback, snapshot=it.snapshot, mode=it.mode, validator_language=it.validator_language, generator_model=it.generator_model, generator_thinking_budget=it.generator_thinking_budget, project_dir=it.project_dir %}
+    {% include "partials/chat_iteration.html" %}
+  {% endwith %}
+{% endfor %}

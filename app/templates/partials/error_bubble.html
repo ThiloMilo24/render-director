@@ -1,0 +1,44 @@
+{# Error-Bubble: zeigt eine Director-Rückfrage oder einen Pipeline-Fehler
+   inline als Chat-Eintrag. Wird vom POST /ui/iterate zurückgegeben,
+   wenn der Director keinen Prompt geliefert hat (DirectorNoPromptError)
+   oder wenn ein ValueError/FileNotFoundError aufschlägt.
+
+   Keine Iteration-Form drunter — der User soll erst sehen, was passiert
+   ist, und dann oben im normalen Form mit angepasstem Prompt neu
+   starten. #}
+<article class="space-y-3" data-error="true">
+  <div class="flex justify-end">
+    <div class="max-w-2xl rounded-2xl rounded-br-sm bg-slate-900 px-4 py-2 text-sm text-white shadow-sm">
+      {{ user_prompt }}
+    </div>
+  </div>
+
+  <div class="flex justify-start">
+    <div class="w-full max-w-3xl space-y-3 rounded-2xl rounded-bl-sm border border-amber-200 bg-amber-50 p-4 shadow-sm">
+      <div class="flex items-start gap-2">
+        <span class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-200 text-xs font-bold text-amber-900">!</span>
+        <div class="flex-1">
+          <h4 class="text-sm font-semibold text-amber-900">{{ title or "Director hat eine Rückfrage gestellt" }}</h4>
+          <p class="mt-1 text-xs text-amber-800">
+            {{ hint or "Statt eines Prompt-Code-Blocks kam unten genannter Text zurück. Schärfe deinen Render-Wunsch und schick ihn nochmal — meist hilft mehr Spezifität (konkrete Geometrie-Anker, Tageszeit, Stimmung)." }}
+          </p>
+        </div>
+      </div>
+
+      {% if director_reply %}
+      <details class="text-xs" open>
+        <summary class="cursor-pointer select-none font-semibold text-amber-900 hover:text-amber-700">
+          Director-Antwort
+        </summary>
+        <pre class="mt-2 max-h-96 overflow-y-auto whitespace-pre-wrap rounded bg-white p-3 text-[11px] leading-relaxed text-slate-700">{{ director_reply }}</pre>
+      </details>
+      {% endif %}
+
+      {% if error_detail %}
+      <div class="text-[11px] text-amber-700">
+        <span class="font-semibold">Technisch:</span> {{ error_detail }}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</article>

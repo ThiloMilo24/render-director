@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Kosten — Render Director{% endblock %}
+
+{% block sidebar %}
+<div class="p-4 text-xs text-slate-500 space-y-2">
+  <h2 class="font-semibold uppercase tracking-wider text-slate-500">{{ t("nav.cost") }}</h2>
+  <p>{{ t("cost.footnote") }}</p>
+  <p class="text-slate-400">
+    Preise sind Schätzungen und in
+    <code class="rounded bg-slate-100 px-1">src/render_director/usage.py</code>
+    (PRICING) anpassbar. Tokens sind exakt aus der API.
+  </p>
+</div>
+{% endblock %}
+
+{% block main %}
+<div class="mx-auto max-w-4xl p-6 space-y-6">
+  <div>
+    <h1 class="text-lg font-semibold tracking-tight">{{ t("cost.title") }}</h1>
+    <p class="text-xs text-slate-500">
+      {{ usage.n_runs }} {{ t("cost.runs_recorded") }}.
+    </p>
+  </div>
+
+  {% if usage.n_runs == 0 %}
+  <div class="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-500">
+    {{ t("cost.empty") }}
+  </div>
+  {% else %}
+
+  {# --- Summary-Karten --- #}
+  <div class="grid grid-cols-3 gap-3">
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <div class="text-[10px] uppercase tracking-wider text-slate-400">{{ t("cost.est_cost") }}</div>
+      <div class="mt-1 text-2xl font-semibold text-slate-900">${{ "%.2f"|format(usage.total_cost_usd) }}</div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <div class="text-[10px] uppercase tracking-wider text-slate-400">{{ t("cost.total_tokens") }}</div>
+      <div class="mt-1 text-2xl font-semibold text-slate-900">{{ "{:,}".format(usage.total_tokens) }}</div>
+      <div class="text-[10px] text-slate-400">
+        {{ "{:,}".format(usage.total_input_tokens) }} in · {{ "{:,}".format(usage.total_output_tokens) }} out
+      </div>
+    </div>
+    <div class="rounded-lg border border-slate-200 bg-white p-4">
+      <div class="text-[10px] uppercase tracking-wider text-slate-400">{{ t("cost.avg_per_run") }}</div>
+      <div class="mt-1 text-2xl font-semibold text-slate-900">
+        ${{ "%.3f"|format(usage.total_cost_usd / usage.n_runs) }}
+      </div>
+    </div>
+  </div>
+
+  {# --- Nach Flow --- #}
+  {% if usage.by_flow %}
+  <div class="flex flex-wrap gap-2 text-xs">
+    {% for flow, f in usage.by_flow.items() %}
+    <span class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1.5">
+      <span class="font-semibold uppercase tracking-wider text-slate-500">{{ flow }}</span>
+      <span class="text-slate-700">${{ "%.2f"|format(f.cost_usd) }}</span>
+      <span class="text-slate-400">· {{ f.runs }} Runs</span>
+    </span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# --- Nach Monat (Abrechnung pro Kalendermonat) --- #}
+  {% if usage.by_month %}
+  <div class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+    <div class="border-b border-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+      {{ t("cost.by_month") }}
+    </div>
+    <table class="w-full text-xs">
+      <thead class="text-slate-400">
+        <tr class="border-b border-slate-100">
+          <th class="px-4 py-2 text-left font-medium">{{ t("cost.month") }}</th>
+          <th class="px-4 py-2 text-right font-medium">{{ t("cost.runs") }}</th>
+          <th class="px-4 py-2 text-right font-medium">{{ t("cost.tokens") }}</th>
+          <th class="px-4 py-2 text-right font-medium">{{ t("cost.cost") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for mo in usage.by_month %}
+        <tr class="border-b border-slate-50 last:border-0 {% if loop.first %}bg-slate-50/60{% endif %}">
+          <td class="px-4 py-2 font-medium text-slate-700">
+            {% if mo.month_idx %}{{ t("month." ~ mo.month_idx) }} {{ mo.year }}{% else %}{{ mo.label }}{% endif %}{% if loop.first %} <span class="ml-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">{{ t("cost.running") }}</span>{% endif %}
+          </td>
+          <td class="px-4 py-2 text-right text-slate-500">{{ mo.runs }}</td>
+          <td class="px-4 py-2 text-right text-slate-500">{{ "{:,}".format(mo.total_tokens) }}</td>
+          <td class="px-4 py-2 text-right font-semibold text-slate-900">${{ "%.2f"|format(mo.cost_usd) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {# --- Nach Modell --- #}
+  <div class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+    <div class="border-b border-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+      {{ t("cost.by_model") }}
+    </div>
+    <table class="w-full text-xs">
+      <thead class="text-slate-400">
+        <tr class="border-b border-slate-100">
+          <th class="px-4 py-2 text-left font-medium">{{ t("cost.model") }}</th>
+          <th class="px-4 py-2 text-right font-medium">{{ t("cost.calls") }}</th>
+          <th class="px-4 py-2 text-right font-medium">Input</th>
+          <th class="px-4 py-2 text-right font-medium">Output</th>
+          <th class="px-4 py-2 text-right font-medium">{{ t("cost.cost") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in usage.by_model %}
+        <tr class="border-b border-slate-50 last:border-0">
+          <td class="px-4 py-2 font-mono text-[11px] text-slate-700">{{ m.model }}</td>
+          <td class="px-4 py-2 text-right text-slate-500">{{ m.calls }}</td>
+          <td class="px-4 py-2 text-right text-slate-500">{{ "{:,}".format(m.input_tokens) }}</td>
+          <td class="px-4 py-2 text-right text-slate-500">{{ "{:,}".format(m.output_tokens) }}</td>
+          <td class="px-4 py-2 text-right font-semibold text-slate-900">${{ "%.3f"|format(m.cost_usd) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# --- Nach Tag (Datum) --- #}
+  <div class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+    <div class="border-b border-slate-100 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+      {{ t("cost.by_day") }}
+    </div>
+    <table class="w-full text-xs">
+      <thead class="text-slate-400">
+        <tr class="border-b border-slate-100">
+          <th class="px-4 py-2 text-left font-medium">{{ t("cost.date") }}</th>
+          <th class="px-4 py-2 text-right font-medium">{{ t("cost.runs") }}</th>
+          <th class="px-4 py-2 text-right font-medium">{{ t("cost.tokens") }}</th>
+          <th class="px-4 py-2 text-right font-medium">{{ t("cost.cost") }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in usage.by_day %}
+        <tr class="border-b border-slate-50 last:border-0">
+          <td class="px-4 py-2 text-slate-700">{{ d.date }}</td>
+          <td class="px-4 py-2 text-right text-slate-500">{{ d.runs }}</td>
+          <td class="px-4 py-2 text-right text-slate-500">{{ "{:,}".format(d.total_tokens) }}</td>
+          <td class="px-4 py-2 text-right font-semibold text-slate-900">${{ "%.3f"|format(d.cost_usd) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="text-[10px] text-slate-400">
+    {{ t("cost.footnote") }}
+  </p>
+  {% endif %}
+</div>
+{% endblock %}

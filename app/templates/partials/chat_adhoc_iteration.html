@@ -1,0 +1,457 @@
+{# Ad-hoc-Chat-Bubble — seit 2026-07-02 mit vollem Score/Section-Means/
+   Advisor/Validator-Report (1:1 wie chat_iteration.html), plus Side-by-
+   Side Input + Result fuer den visuellen Vergleich. #}
+<article class="space-y-3" data-run-id="{{ result.run_id }}">
+  {# --- User-Bubble --- #}
+  <div class="flex justify-end">
+    <div class="max-w-2xl rounded-2xl rounded-br-sm bg-slate-900 px-4 py-2 text-sm text-white shadow-sm">
+      {% if result.iteration_type != "initial" and user_feedback %}
+        <div>{{ user_feedback }}</div>
+        <div class="mt-1 text-[10px] uppercase tracking-wider text-slate-400">
+          {{ result.iteration_type }} · Basis-Bild unveraendert
+        </div>
+      {% else %}
+        {{ user_prompt }}
+      {% endif %}
+    </div>
+  </div>
+
+  {# --- Assistant-Bubble: Input + Result + Iteration-Form --- #}
+  <div class="flex justify-start">
+    <div class="w-full max-w-3xl space-y-3 rounded-2xl rounded-bl-sm border border-slate-200 bg-white p-4 shadow-sm">
+
+      {# Linkes Bild = Basis des Renders. Bei refine/inpaint ist das das
+         BEARBEITETE (vorige) Result, nicht das Session-Original — sonst wirkt
+         es, als würde Inpaint das Original nehmen (siehe User-Feedback). #}
+      {% set _is_edit = result.iteration_type in ("inpaint", "refine") %}
+      {% set _base_url = result.previous_url if (_is_edit and result.previous_url) else result.input_url %}
+      {% set _base_label = t("bubble.edited_base") if (_is_edit and result.previous_url) else t("bubble.input") %}
+      <div class="grid grid-cols-2 gap-2">
+        <figure class="overflow-hidden rounded-md border border-slate-200">
+          <a href="{{ _base_url }}" target="_blank" rel="noopener">
+            <img src="{{ _base_url }}" alt="Basis" class="block w-full" loading="lazy" />
+          </a>
+          <figcaption class="bg-slate-50 px-2 py-1 text-[10px] uppercase tracking-wider text-slate-500">{{ _base_label }}</figcaption>
+        </figure>
+        <figure class="overflow-hidden rounded-md border border-slate-200">
+          <a href="{{ result.result_url }}" target="_blank" rel="noopener">
+            <img src="{{ result.result_url }}" alt="Result" class="block w-full" loading="lazy" />
+          </a>
+          <figcaption class="bg-slate-50 px-2 py-1 text-[10px] uppercase tracking-wider text-slate-500">{{ t("bubble.result") }}</figcaption>
+        </figure>
+      </div>
+
+      {# --- Genutzte Referenzbibliothek-Fotos (Tier-0-RAG) ---------------
+         Projekt-Tag hat zu einem Ordner der Bibliothek gepasst → dessen
+         Fotos gingen als Stil-Anker an den Generator. #}
+      {% if result.reference_library_refs %}
+      <div class="flex flex-wrap items-center gap-1 text-[10px] text-slate-500">
+        <span class="inline-flex items-center rounded bg-indigo-50 px-1.5 py-0.5 font-medium text-indigo-700"
+              title="{{ t('reflib.title') }}">🖼️ {{ t('reflib.badge') }}</span>
+        {% for ref in result.reference_library_refs %}
+        <span class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-slate-600">{{ ref }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {# --- Score + Advisor + Validator ----------------------------------
+         Zwei-Phasen-Anzeige: frischer Render → Slot mit Spinner lädt die
+         Bewertung nach; History-Load → Score schon bekannt, direkt inline.
+         Nutzt denselben Score-Block wie die Snapshot-Schiene. #}
+      {% if pending_validation %}
+        {% with validate_url="/ui/adhoc/iterate/validate" %}
+        {% include "partials/validate_slot.html" %}
+        {% endwith %}
+      {% else %}
+        {% include "partials/iteration_scoreblock.html" %}
+      {% endif %}
+
+      <div class="flex flex-wrap items-center gap-2 text-[10px] text-slate-400">
+        <span class="uppercase tracking-wider">{{ result.iteration_type }}</span>
+        {% if result.project_tag %}
+        <span class="text-slate-300">·</span>
+        <a href="/adhoc?tag={{ result.project_tag|urlencode }}"
+           class="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-700 hover:bg-slate-200"
+           title="Nur Iterationen mit Tag '{{ result.project_tag }}' zeigen">🏷️ {{ result.project_tag }}</a>
+        {% endif %}
+        <span class="text-slate-300">·</span>
+        <span>Run-ID: {{ result.run_id }}</span>
+        <form
+          hx-post="/ui/run/delete"
+          hx-target="closest article"
+          hx-swap="delete"
+          hx-confirm="{{ t('bubble.delete_confirm') }}"
+          class="ml-auto inline-block"
+        >
+          <input type="hidden" name="run_dir" value="{{ result.run_dir }}" />
+          <button
+            type="submit"
+            class="rounded px-1.5 py-0.5 text-red-500 hover:bg-red-50 hover:text-red-700"
+            title="Run loeschen"
+          >{{ t("bubble.delete") }}</button>
+        </form>
+      </div>
+
+      {# Standort-Kontext der Iteration: nur anzeigen wenn was gesetzt war.
+         Site-Ref-Thumb mit ggf. eingebranntem Pin-Hinweis als Overlay,
+         Coords als Maps/Earth-Quick-Links.                            #}
+      {% set _sl = result.site_location or {} %}
+      {% set _mk = result.site_reference_marker or {} %}
+      {% set _lat = _sl.get('latitude_deg') if _sl else None %}
+      {% set _lon = _sl.get('longitude_deg') if _sl else None %}
+      {% set _place = _sl.get('place_name') if _sl else None %}
+      {% set _mx = _mk.get('x_pct') if _mk else None %}
+      {% set _my = _mk.get('y_pct') if _mk else None %}
+      {% if result.site_reference_url or _lat is not none or _place %}
+      <div class="flex items-start gap-3 rounded-md border border-slate-100 bg-slate-50 p-2">
+        {% if result.site_reference_url %}
+        <div class="relative shrink-0">
+          <img src="{{ result.site_reference_url }}" alt="Site-Ref" class="block max-h-20 rounded" loading="lazy" />
+          {% if _mx is not none and _my is not none %}
+          <span class="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-red-600 shadow ring-1 ring-red-400/60"
+                style="left: {{ (_mx*100)|round(2) }}%; top: {{ (_my*100)|round(2) }}%; width: 10px; height: 10px;"></span>
+          {% endif %}
+        </div>
+        {% endif %}
+        <div class="min-w-0 flex-1 text-[10px] text-slate-600">
+          <div class="font-semibold uppercase tracking-wider text-slate-500">{{ t("bubble.location_context") }}</div>
+          {% if _place %}<div>{{ _place }}</div>{% endif %}
+          {% if _lat is not none and _lon is not none %}
+          <div class="mt-0.5 flex flex-wrap items-center gap-2">
+            <span>{{ "%.4f"|format(_lat) }}, {{ "%.4f"|format(_lon) }}</span>
+            <a href="https://www.google.com/maps?q={{ _lat }},{{ _lon }}" target="_blank" rel="noopener" class="text-slate-700 hover:underline">🗺️ Maps</a>
+            <a href="https://earth.google.com/web/@{{ _lat }},{{ _lon }},800a,1500d,35y,0h,45t,0r" target="_blank" rel="noopener" class="text-slate-700 hover:underline">🌍 Earth</a>
+          </div>
+          {% endif %}
+          {% if _mx is not none and _my is not none %}
+          <div class="mt-0.5 text-slate-400">Pin bei {{ (_mx*100)|round(1) }}% × {{ (_my*100)|round(1) }}%</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+      {# Director-Reply (Begruendung + Prompt) ausklappbar. #}
+      <details class="text-xs">
+        <summary class="cursor-pointer select-none text-slate-500 hover:text-slate-900">
+          {{ t("bubble.show_director") }}
+        </summary>
+        <pre class="mt-2 max-h-96 overflow-y-auto whitespace-pre-wrap rounded bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-700">{{ result.director_reply }}</pre>
+      </details>
+
+      {# --- Iteration-Form: Regenerate / Refine / Inpaint -----------------
+         Kein input_image-File-Upload mehr (Anker ist persistent im
+         previous_run_dir). Der Server zieht input.png + result.png +
+         final_prompt.txt aus dem Run-Dir. Inpaint zusätzlich: Maske vom
+         Canvas + iteration_type=inpaint (nur gpt-image-Backend).          #}
+      <form
+        class="border-t border-slate-100 pt-3 space-y-2"
+        hx-post="/ui/adhoc/iterate"
+        hx-target="#adhoc-chat-list"
+        hx-swap="beforeend"
+        hx-indicator="#adhoc-chat-loading"
+        hx-encoding="multipart/form-data"
+        hx-disabled-elt="find button, find textarea"
+        hx-on::after-request="if (event.detail.successful) { this.querySelectorAll('textarea').forEach(t => t.value = ''); }"
+      >
+        <input type="hidden" name="user_prompt" value="{{ user_prompt }}" />
+        <input type="hidden" name="mode" value="{{ mode | default('A') }}" />
+        <input type="hidden" name="validator_language" value="{{ validator_language | default('de') }}" />
+        <input type="hidden" name="parent_run_id" value="{{ result.run_id }}" />
+        <input type="hidden" name="previous_run_dir" value="{{ result.run_dir }}" />
+
+        {# Inpaint: disabled hidden iteration_type — nur der Inpaint-Submit
+           aktiviert es. Refine/Regenerate liefern ihren Wert per Button
+           (der disabled hidden input wird dann nicht mitgesendet → kein
+           Konflikt). Plus das Masken-File-Feld (vom Canvas befüllt). #}
+        <input type="hidden" name="iteration_type" value="inpaint" disabled data-inpaint-itype />
+        <input type="file" name="mask" class="hidden" data-mask-input />
+
+        <textarea
+          name="user_feedback"
+          rows="2"
+          class="block w-full rounded-md border border-slate-300 px-3 py-2 text-xs shadow-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          placeholder="{{ t('bubble.feedback_ph') }}"
+        ></textarea>
+
+        {# --- Inpaint-Editor (ausklappbar) --------------------------------
+           Canvas-Overlay über dem Result: Pinsel markiert die Region, die
+           neu gerendert werden soll. Export als Alpha-PNG in Bild-
+           Auflösung (transparent = neu malen). Nur mit gpt-image sinnvoll. #}
+        <div class="rounded-md border border-slate-200 bg-slate-50">
+          <button
+            type="button"
+            id="inpaint-toggle-{{ result.run_id }}"
+            class="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-900"
+          >
+            <span>{{ t("inpaint.toggle") }}</span>
+            <span class="text-[10px] normal-case tracking-normal text-slate-400">{{ t("inpaint.gpt_only") }}</span>
+          </button>
+          <div id="inpaint-panel-{{ result.run_id }}" class="hidden border-t border-slate-200 p-3 space-y-2">
+            <div class="flex flex-wrap items-center gap-3 text-[11px] text-slate-600">
+              <div class="inline-flex overflow-hidden rounded-md border border-slate-300">
+                <button type="button" data-inpaint-mode="paint"
+                  class="bg-slate-900 px-2 py-1 font-medium text-white">{{ t("inpaint.paint") }}</button>
+                <button type="button" data-inpaint-mode="erase"
+                  class="bg-white px-2 py-1 font-medium text-slate-700">{{ t("inpaint.erase") }}</button>
+              </div>
+              <label class="inline-flex items-center gap-1">
+                <span>{{ t("inpaint.brush") }}</span>
+                <input type="range" min="8" max="120" value="40"
+                  id="inpaint-brush-{{ result.run_id }}" class="h-1 w-24 align-middle" />
+              </label>
+              <button type="button" data-inpaint-clear
+                class="rounded border border-slate-300 bg-white px-2 py-1 font-medium text-slate-600 hover:bg-slate-50">
+                {{ t("inpaint.reset") }}
+              </button>
+            </div>
+
+            <div class="relative inline-block max-w-full leading-none">
+              <img
+                id="inpaint-img-{{ result.run_id }}"
+                src="{{ result.result_url }}"
+                alt="Result zum Übermalen"
+                class="block max-w-full select-none rounded"
+                draggable="false"
+                loading="lazy"
+              />
+              <canvas
+                id="inpaint-canvas-{{ result.run_id }}"
+                class="absolute inset-0 h-full w-full cursor-crosshair touch-none rounded opacity-50"
+              ></canvas>
+            </div>
+
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-[10px] leading-snug text-slate-400">
+                {{ t("inpaint.hint") }}
+              </p>
+              <button
+                type="button"
+                id="inpaint-submit-{{ result.run_id }}"
+                class="inline-flex shrink-0 items-center gap-1 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                title="Nur die markierte Region neu rendern (gpt-image-1)"
+              >
+                {{ t("inpaint.submit") }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {% with zone_id="adhoc-iter-" ~ result.run_id %}
+        {% include "partials/attachment_zone.html" %}
+        {% endwith %}
+
+        {# Generator pro Iteration änderbar — vorher war er ein verstecktes
+           Feld, sodass man mitten in einer Session das Modell nicht wechseln
+           konnte (z.B. auf GPT für Inpaint). Vorauswahl = bisheriges Modell. #}
+        <div class="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+          <label class="flex items-center gap-1">
+            <span>{{ t("opt.generator") }}</span>
+            <select
+              name="generator_model"
+              class="rounded border-slate-300 px-2 py-1 text-[11px]"
+              hx-on:change="const isNb2 = this.value.includes('gemini-3'); const th = this.form.querySelector('[data-iter-thinking-slot]'); if (th) th.classList.toggle('hidden', !isNb2);"
+            >
+              <option value="gemini-2.5-flash-image" {% if generator_model == 'gemini-2.5-flash-image' %}selected{% endif %}>NB1 (gemini-2.5) · günstig</option>
+              <option value="gemini-3.1-flash-image-preview" {% if generator_model == 'gemini-3.1-flash-image-preview' %}selected{% endif %}>NB2 (gemini-3.1)</option>
+              <option value="gpt-image-1" {% if generator_model == 'gpt-image-1' %}selected{% endif %}>GPT (gpt-image-1) · teurer</option>
+            </select>
+          </label>
+          <label class="flex items-center gap-1 {% if 'gemini-3' not in (generator_model or '') %}hidden{% endif %}" data-iter-thinking-slot>
+            <span>{{ t("opt.thinking") }}</span>
+            <select name="generator_thinking_budget" class="rounded border-slate-300 px-2 py-1 text-[11px]">
+              <option value="-1" {% if generator_thinking_budget == -1 %}selected{% endif %}>High (dynamic)</option>
+              <option value="0" {% if generator_thinking_budget == 0 %}selected{% endif %}>Off</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="mt-2 flex items-center justify-end gap-2">
+          <button
+            type="submit"
+            name="iteration_type"
+            value="refine"
+            class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Edit-Pass auf dem letzten Result (Detail-treu, Drift-Risiko)"
+          >
+            {{ t("bubble.refine") }}
+          </button>
+          <button
+            type="submit"
+            name="iteration_type"
+            value="regenerate"
+            class="inline-flex items-center gap-1 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            title="Neuer Versuch vom Original-Input (Geometrie-treu)"
+          >
+            {{ t("bubble.regenerate") }}
+          </button>
+        </div>
+      </form>
+
+      {# --- Inpaint-Canvas-Logik (scoped auf diese Bubble via run_id) -----
+         Vanilla-Canvas, keine Lib. Pinsel malt solide Deckkraft (Alpha
+         255) — der sichtbare Halbton kommt von der CSS-opacity-50 des
+         Canvas. Beim Export: opakes Bild, dann destination-out mit den
+         Pinselstrichen → markierte Region wird alpha=0 (neu malen), Rest
+         alpha=255 (bleibt). Maske exportiert in Natural-Resolution. #}
+      <script>
+      (function() {
+        var uid = "{{ result.run_id }}";
+        var toggle = document.getElementById("inpaint-toggle-" + uid);
+        var panel = document.getElementById("inpaint-panel-" + uid);
+        var img = document.getElementById("inpaint-img-" + uid);
+        var canvas = document.getElementById("inpaint-canvas-" + uid);
+        var brush = document.getElementById("inpaint-brush-" + uid);
+        var submitBtn = document.getElementById("inpaint-submit-" + uid);
+        if (!toggle || !panel || !img || !canvas || !submitBtn) return;
+        var form = canvas.closest("form");
+        var ctx = canvas.getContext("2d");
+        var mode = "paint";       // "paint" | "erase"
+        var drawing = false;
+        var last = null;
+        var sized = false;
+
+        // Canvas-Intrinsic-Größe = Natural-Resolution des Result-Bildes.
+        function sizeCanvas() {
+          if (sized) return;
+          var w = img.naturalWidth, h = img.naturalHeight;
+          if (!w || !h) return;
+          canvas.width = w;
+          canvas.height = h;
+          sized = true;
+        }
+        if (img.complete) sizeCanvas();
+        img.addEventListener("load", sizeCanvas);
+
+        toggle.addEventListener("click", function() {
+          panel.classList.toggle("hidden");
+          sizeCanvas();
+        });
+
+        // Modus-Umschalter (Malen / Radieren)
+        panel.querySelectorAll("[data-inpaint-mode]").forEach(function(b) {
+          b.addEventListener("click", function() {
+            mode = b.getAttribute("data-inpaint-mode");
+            panel.querySelectorAll("[data-inpaint-mode]").forEach(function(x) {
+              var on = x === b;
+              x.classList.toggle("bg-slate-900", on);
+              x.classList.toggle("text-white", on);
+              x.classList.toggle("bg-white", !on);
+              x.classList.toggle("text-slate-700", !on);
+            });
+          });
+        });
+
+        // Koordinaten Pointer → Canvas-Pixel (mit Display-Skalierung).
+        function toCanvasXY(e) {
+          var rect = canvas.getBoundingClientRect();
+          var sx = canvas.width / rect.width;
+          var sy = canvas.height / rect.height;
+          return {
+            x: (e.clientX - rect.left) * sx,
+            y: (e.clientY - rect.top) * sy,
+            r: (parseInt(brush.value, 10) || 40) * sx / 2
+          };
+        }
+        function stroke(a, b, radius) {
+          ctx.globalCompositeOperation = (mode === "erase") ? "destination-out" : "source-over";
+          ctx.strokeStyle = "rgba(220,38,38,1)";
+          ctx.fillStyle = "rgba(220,38,38,1)";
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.lineWidth = radius * 2;
+          if (a) {
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+          // Punkt-Dab, damit Einzel-Klicks auch malen.
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        function down(e) {
+          sizeCanvas();
+          if (!sized) return;
+          drawing = true;
+          canvas.setPointerCapture(e.pointerId);
+          var p = toCanvasXY(e);
+          stroke(null, p, p.r);
+          last = p;
+          if (mode === "paint") canvas.dataset.painted = "1";
+          e.preventDefault();
+        }
+        function move(e) {
+          if (!drawing) return;
+          var p = toCanvasXY(e);
+          stroke(last, p, p.r);
+          last = p;
+          if (mode === "paint") canvas.dataset.painted = "1";
+          e.preventDefault();
+        }
+        function up(e) {
+          drawing = false;
+          last = null;
+          try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+        }
+        canvas.addEventListener("pointerdown", down);
+        canvas.addEventListener("pointermove", move);
+        canvas.addEventListener("pointerup", up);
+        canvas.addEventListener("pointerleave", up);
+
+        // Zurücksetzen
+        panel.querySelector("[data-inpaint-clear]").addEventListener("click", function() {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          canvas.dataset.painted = "";
+        });
+
+        // Export der Maske + Submit.
+        submitBtn.addEventListener("click", function() {
+          if (canvas.dataset.painted !== "1") {
+            alert("Bitte zuerst eine Region übermalen.");
+            return;
+          }
+          var fb = form.querySelector("textarea[name=user_feedback]");
+          if (fb && !fb.value.trim()) {
+            alert("Bitte oben beschreiben, was in die markierte Region kommt.");
+            fb.focus();
+            return;
+          }
+          var out = document.createElement("canvas");
+          out.width = canvas.width;
+          out.height = canvas.height;
+          var octx = out.getContext("2d");
+          octx.fillStyle = "#000000";
+          octx.fillRect(0, 0, out.width, out.height);     // opak = bleibt
+          octx.globalCompositeOperation = "destination-out";
+          octx.drawImage(canvas, 0, 0);                   // Pinsel → alpha 0
+          out.toBlob(function(blob) {
+            if (!blob) { alert("Maske konnte nicht erzeugt werden."); return; }
+            var file = new File([blob], "mask.png", { type: "image/png" });
+            var dt = new DataTransfer();
+            dt.items.add(file);
+            var maskInput = form.querySelector("input[name=mask]");
+            maskInput.files = dt.files;
+            var itype = form.querySelector("[data-inpaint-itype]");
+            itype.disabled = false;                       // iteration_type=inpaint aktivieren
+            form.requestSubmit();
+          }, "image/png");
+        });
+
+        // Nach dem Request: Inpaint-Zustand zurücksetzen, damit ein späterer
+        // Refine/Regenerate auf DERSELBEN (alten) Form-Instanz sauber ist
+        // (kein enabled iteration_type=inpaint, keine Alt-Maske).
+        form.addEventListener("htmx:afterRequest", function() {
+          var itype = form.querySelector("[data-inpaint-itype]");
+          if (itype) itype.disabled = true;
+          var maskInput = form.querySelector("input[name=mask]");
+          if (maskInput) { try { maskInput.value = ""; } catch (_) {} }
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          canvas.dataset.painted = "";
+          panel.classList.add("hidden");
+        });
+      })();
+      </script>
+    </div>
+  </div>
+</article>

@@ -1,0 +1,77 @@
+{# Score + Advisor + Validator-Report einer Snapshot-Iteration.
+   Zweifach genutzt:
+   (a) inline beim History-Load (Score schon auf Disk), pending_validation=False
+   (b) nachgeladen von POST /ui/iterate/validate (Zwei-Phasen-Anzeige)
+   Erwartet `result` mit final_score / section_means / advisor_* / validator_reply. #}
+<div class="space-y-3" data-scoreblock>
+  {# Score-Zeile: ≥4.0 grün, 3.0-4.0 amber, <3.0 rot. #}
+  {% if result.final_score is not none or (result.section_means and result.section_means.geometrie is not none) %}
+  <div class="flex flex-wrap items-center gap-2 text-xs">
+    {% if result.final_score is not none %}
+    {% set fs = result.final_score %}
+    <span class="inline-flex items-center rounded px-2 py-0.5 font-semibold
+                 {% if fs >= 4.0 %}bg-emerald-50 text-emerald-700
+                 {% elif fs >= 3.0 %}bg-amber-50 text-amber-700
+                 {% else %}bg-red-50 text-red-700{% endif %}">
+      Score {{ "%.2f"|format(fs) }}
+    </span>
+    {% endif %}
+    {% set sm = result.section_means %}
+    {% if sm and sm.geometrie is not none %}
+    {% macro sub(label, val) %}
+      {% if val is not none %}
+        <span class="{% if val < 3.0 %}font-semibold text-red-600{% elif val < 4.0 %}text-amber-600{% else %}text-slate-500{% endif %}">{{ label }} {{ "%.1f"|format(val) }}</span>
+      {% endif %}
+    {% endmacro %}
+    <span class="inline-flex items-center gap-1">
+      {{ sub("G", sm.geometrie) }}
+      <span class="text-slate-300">·</span>
+      {{ sub("M", sm.material) }}
+      <span class="text-slate-300">·</span>
+      {{ sub("A", sm.anforderung) }}
+    </span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# Director-Advisor-Empfehlung (regenerate=amber / refine=sky / stop=emerald). #}
+  {% if result.advisor_action %}
+  {% set action = result.advisor_action %}
+  {% set conf = result.advisor_confidence or "medium" %}
+  <div class="rounded-md border p-2.5 text-xs
+              {% if action == 'regenerate' %}border-amber-200 bg-amber-50
+              {% elif action == 'refine' %}border-sky-200 bg-sky-50
+              {% elif action == 'stop' %}border-emerald-200 bg-emerald-50
+              {% else %}border-slate-200 bg-slate-50{% endif %}
+              {% if conf == 'low' %}opacity-75{% endif %}">
+    <div class="flex items-baseline gap-2">
+      <span class="font-semibold uppercase tracking-wide
+                   {% if action == 'regenerate' %}text-amber-800
+                   {% elif action == 'refine' %}text-sky-800
+                   {% elif action == 'stop' %}text-emerald-800
+                   {% else %}text-slate-700{% endif %}">
+        {% if action == 'regenerate' %}{{ t("score.rec_regenerate") }}
+        {% elif action == 'refine' %}{{ t("score.rec_refine") }}
+        {% elif action == 'stop' %}{{ t("score.rec_stop") }}
+        {% else %}{{ action }}{% endif %}
+      </span>
+      <span class="text-[10px] uppercase tracking-wider text-slate-500">
+        {{ t("score.confidence") }}: {{ conf }}{% if conf == 'low' %} {{ t("score.user_decides") }}{% endif %}
+      </span>
+    </div>
+    {% if result.advisor_reason %}
+    <div class="mt-1 text-slate-700">{{ result.advisor_reason }}</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# Validator-Report: ausklappbar. #}
+  {% if result.validator_reply %}
+  <details class="text-xs">
+    <summary class="cursor-pointer select-none text-slate-500 hover:text-slate-900">
+      {{ t("bubble.show_validator") }}
+    </summary>
+    <pre class="mt-2 max-h-96 overflow-y-auto whitespace-pre-wrap rounded bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-700">{{ result.validator_reply }}</pre>
+  </details>
+  {% endif %}
+</div>

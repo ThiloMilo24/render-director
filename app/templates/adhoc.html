@@ -1,0 +1,420 @@
+{# Ad-hoc-Seite — Drop-Zone + Prompt + Chat-Verlauf. Schwester-Seite zu
+   index.html, aber ohne Snapshot-Detail-Logik. Sidebar bleibt als
+   Schnellzugriff auf Snapshots stehen (User kann ueber Header-Tab oder
+   Sidebar-Klick zurueckspringen). #}
+{% extends "base.html" %}
+
+{% block sidebar %}
+  {% include "partials/sidebar.html" %}
+{% endblock %}
+
+{% block header_status %}
+  {% if project_dir %}
+    <span class="font-medium text-emerald-700" title="Projekt-Modus: {{ project_dir }}">
+      {{ project_display_name or 'Projekt' }}
+    </span>
+    <span class="mx-1 text-slate-300">·</span>
+  {% endif %}
+  <span class="font-medium text-slate-700">Sofort-Render</span>
+  <span class="mx-1 text-slate-300">·</span>
+  <span class="text-slate-400">localhost:8765</span>
+{% endblock %}
+
+{% block main %}
+<div id="main-pane" class="h-full">
+  <div class="mx-auto max-w-3xl p-4">
+    <div class="mb-3">
+      <h2 class="text-lg font-semibold text-slate-900">{{ t("adhoc.title") }}</h2>
+      <p class="text-xs text-slate-500">
+        {{ t("adhoc.subtitle") }}
+      </p>
+      {% if adhoc_root %}
+      <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+        <span>📁 {{ t("adhoc.saved_in") }} <span class="font-mono text-slate-500">{{ adhoc_root }}</span></span>
+        <form method="post" action="/ui/adhoc/change-folder" class="inline">
+          <button type="submit"
+            class="rounded border border-slate-300 bg-white px-2 py-0.5 text-[10px] font-medium text-slate-600 shadow-sm transition hover:bg-slate-50"
+            title="Nativen Windows-Ordner-Dialog öffnen">{{ t("adhoc.change_folder") }}</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+
+    {# --- Chat-Verlauf -------------------------------------------------- #}
+    <section>
+      <h3 class="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+        {{ t("adhoc.history") }}
+        {% if past_iterations %}
+        <span class="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">{{ past_iterations|length }}</span>
+        {% endif %}
+      </h3>
+
+      {# Tag-Filter (URL-driven) — nur sichtbar wenn ueberhaupt Tags
+         existieren. Bookmark-baren Filter via Query ?tag=…              #}
+      {% if available_tags %}
+      <div class="mb-3 flex items-center gap-2 text-xs">
+        <span class="uppercase tracking-wider text-slate-500">{{ t("adhoc.filter") }}</span>
+        <select
+          class="rounded border-slate-300 px-2 py-1"
+          onchange="const v = this.value; window.location.href = v ? ('/adhoc?tag=' + encodeURIComponent(v)) : '/adhoc';"
+        >
+          <option value="" {% if not active_tag %}selected{% endif %}>{{ t("adhoc.filter_all") }}</option>
+          {% for t in available_tags %}
+          <option value="{{ t }}" {% if active_tag == t %}selected{% endif %}>{{ t }}</option>
+          {% endfor %}
+        </select>
+        {% if active_tag %}
+        <a href="/adhoc" class="text-slate-500 hover:underline">{{ t("adhoc.filter_reset") }}</a>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <div id="adhoc-chat-list" class="space-y-6">
+        {% include "partials/iterations_chunk_adhoc.html" %}
+      </div>
+
+      {# Loading-Indikator (htmx blendet via .htmx-indicator ein/aus). #}
+      <div id="adhoc-chat-loading" class="htmx-indicator mt-4 flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+        <svg class="h-4 w-4 shrink-0 animate-spin text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+        </svg>
+        <span class="flex-1">{{ t("adhoc.loading") }}</span>
+        <button
+          type="button"
+          class="shrink-0 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+          onclick="document.querySelectorAll('.htmx-request').forEach(el => htmx.trigger(el, 'htmx:abort'))"
+        >{{ t("adhoc.cancel") }}</button>
+      </div>
+
+      {# --- Initial-Form: Drop-Zone + Prompt + Submit -------------------- #}
+      <form
+        class="mt-6 space-y-3"
+        hx-post="/ui/adhoc/iterate"
+        hx-target="#adhoc-chat-list"
+        hx-swap="beforeend"
+        hx-indicator="#adhoc-chat-loading"
+        hx-encoding="multipart/form-data"
+        hx-disabled-elt="find button, find textarea, find input"
+        hx-on::after-request="if (event.detail.successful) { this.reset(); const dzPrev = this.querySelector('[data-dropzone-preview]'); const dzEmpty = this.querySelector('[data-dropzone-empty]'); if (dzPrev && dzEmpty) { dzPrev.classList.add('hidden'); dzEmpty.classList.remove('hidden'); const img = dzPrev.querySelector('img'); if (img) img.removeAttribute('src'); } const srPrev = this.querySelector('[data-adhoc-siteref-preview]'); const srEmpty = this.querySelector('[data-adhoc-siteref-empty]'); if (srPrev && srEmpty) { srPrev.classList.add('hidden'); srEmpty.classList.remove('hidden'); const img = srPrev.querySelector('img'); if (img) img.removeAttribute('src'); const pin = srPrev.querySelector('[data-adhoc-siteref-pin]'); if (pin) pin.classList.add('hidden'); } const maps = this.querySelector('[data-adhoc-maps]'); const earth = this.querySelector('[data-adhoc-earth]'); if (maps) maps.href = 'https://www.google.com/maps'; if (earth) earth.href = 'https://earth.google.com/web/'; }"
+      >
+        <input type="hidden" name="iteration_type" value="initial" />
+
+        {# Drop-Zone. div+expliziter onclick statt <label>-wrapping — robuster
+           ueber Browser. Click triggert input.click() programmatisch,
+           Drag-and-Drop populiert via DataTransfer. Preview wird via
+           adhocOnInputImageChange befuellt. #}
+        <div
+          data-adhoc-input-zone
+          class="block cursor-pointer select-none rounded-lg border-2 border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500 transition hover:border-slate-400 hover:bg-slate-50"
+          onclick="this.querySelector('input[type=file]').click()"
+          ondragover="event.preventDefault(); event.stopPropagation(); this.classList.add('border-slate-900','bg-slate-50');"
+          ondragleave="event.preventDefault(); event.stopPropagation(); this.classList.remove('border-slate-900','bg-slate-50');"
+          ondrop="event.preventDefault(); event.stopPropagation(); this.classList.remove('border-slate-900','bg-slate-50'); adhocAcceptDroppedFile(this, event.dataTransfer.files[0]);"
+        >
+          <div data-dropzone-empty>
+            <div class="text-2xl">⤓</div>
+            <div class="mt-1">{{ t("adhoc.drop_here") }}</div>
+            <div class="mt-0.5 text-[11px] text-slate-400">{{ t("adhoc.drop_hint") }}</div>
+          </div>
+          <div data-dropzone-preview class="hidden pointer-events-none">
+            <img alt="Vorschau" class="mx-auto max-h-64 rounded shadow-sm" />
+            <div class="mt-2 text-[11px] text-slate-500" data-dropzone-name></div>
+            <div class="mt-0.5 text-[10px] text-slate-400">{{ t("adhoc.change_image") }}</div>
+          </div>
+          <input
+            type="file"
+            name="input_image"
+            accept="image/png,image/jpeg,image/webp"
+            class="hidden"
+            onchange="adhocOnInputImageChange(this)"
+            onclick="event.stopPropagation()"
+          />
+        </div>
+
+        <label class="block">
+          <span class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+            {{ t("adhoc.render_wish") }}
+          </span>
+          <textarea
+            name="user_prompt"
+            rows="3"
+            required
+            class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+            placeholder="{{ t('adhoc.render_wish_ph') }}"
+          ></textarea>
+        </label>
+
+        {% with zone_id="adhoc-init" %}
+        {% include "partials/attachment_zone.html" %}
+        {% endwith %}
+
+        <label class="block">
+          <span class="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">
+            {{ t("adhoc.project_tag") }}
+          </span>
+          <input
+            type="text" name="project_tag"
+            list="adhoc-tags-datalist"
+            value="{{ active_tag or '' }}"
+            placeholder="{{ t('adhoc.project_tag_ph') }}"
+            class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+          />
+          {% if available_tags %}
+          <datalist id="adhoc-tags-datalist">
+            {% for t in available_tags %}<option value="{{ t }}"></option>{% endfor %}
+          </datalist>
+          {% endif %}
+          <span class="mt-0.5 block text-[10px] text-slate-400">{{ t("adhoc.project_tag_hint") }}</span>
+        </label>
+
+        {# --- Optional: Standort-Kontext (Drohne/Maps + Coords + Pin) ----
+           Bewusst zusammengeklappt damit die Standard-Drop-Zone oben
+           luftig bleibt. Ein-klick-auf zeigt die zwei Spalten.        #}
+        <details class="rounded-md border border-slate-200 bg-white">
+          <summary class="cursor-pointer select-none px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:text-slate-900">
+            {{ t("adhoc.location_context") }} ▾
+          </summary>
+          <div class="grid grid-cols-1 gap-4 border-t border-slate-200 p-3 md:grid-cols-2">
+
+            {# Linke Spalte: Coords -------------------------------------- #}
+            <div class="space-y-2">
+              <div class="grid grid-cols-2 gap-2">
+                <label class="block">
+                  <span class="mb-0.5 block text-[11px] uppercase tracking-wider text-slate-500">Lat (°N)</span>
+                  <input
+                    type="text" inputmode="decimal" name="latitude_deg"
+                    placeholder="47.2692"
+                    class="block w-full rounded-md border border-slate-300 px-2 py-1 text-sm shadow-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                    oninput="updateAdhocMapsLinks(this.form)"
+                  />
+                </label>
+                <label class="block">
+                  <span class="mb-0.5 block text-[11px] uppercase tracking-wider text-slate-500">Lon (°E)</span>
+                  <input
+                    type="text" inputmode="decimal" name="longitude_deg"
+                    placeholder="11.4041"
+                    class="block w-full rounded-md border border-slate-300 px-2 py-1 text-sm shadow-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                    oninput="updateAdhocMapsLinks(this.form)"
+                  />
+                </label>
+              </div>
+              <label class="block">
+                <span class="mb-0.5 block text-[11px] uppercase tracking-wider text-slate-500">{{ t("adhoc.place_name") }}</span>
+                <input
+                  type="text" name="place_name"
+                  placeholder="z.B. Innsbruck"
+                  class="block w-full rounded-md border border-slate-300 px-2 py-1 text-sm shadow-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  oninput="updateAdhocMapsLinks(this.form)"
+                />
+              </label>
+              {# Immer sichtbar: ohne Eingabe öffnen sie Maps/Earth allgemein
+                 (zum Suchen), mit Ortsname eine Suche, mit Koordinaten den Punkt. #}
+              <div class="flex flex-wrap items-center gap-2 pt-1">
+                <a data-adhoc-maps href="https://www.google.com/maps" target="_blank" rel="noopener"
+                   class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50">🗺️ Maps öffnen</a>
+                <a data-adhoc-earth href="https://earth.google.com/web/" target="_blank" rel="noopener"
+                   class="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50">🌍 Earth öffnen</a>
+              </div>
+              <p class="text-[10px] leading-snug text-slate-400">
+                {{ t("adhoc.location_hint") }}
+              </p>
+            </div>
+
+            {# Rechte Spalte: Site-Ref-Drop + Click-to-Pin --------------- #}
+            <div class="space-y-2">
+              <input type="hidden" name="site_reference_marker_x_pct" />
+              <input type="hidden" name="site_reference_marker_y_pct" />
+              <div
+                data-adhoc-siteref-zone
+                class="block cursor-pointer select-none rounded-md border-2 border-dashed border-slate-300 bg-white p-3 text-center text-xs text-slate-500 transition hover:border-slate-400 hover:bg-slate-50"
+                onclick="adhocSiteRefZoneClick(event, this)"
+                ondragover="event.preventDefault(); event.stopPropagation(); this.classList.add('border-slate-900','bg-slate-50');"
+                ondragleave="event.preventDefault(); event.stopPropagation(); this.classList.remove('border-slate-900','bg-slate-50');"
+                ondrop="event.preventDefault(); event.stopPropagation(); this.classList.remove('border-slate-900','bg-slate-50'); adhocAcceptDroppedSiteRef(this, event.dataTransfer.files[0]);"
+              >
+                <div data-adhoc-siteref-empty>
+                  <div class="text-xl">⤓</div>
+                  <div class="mt-1">{{ t("adhoc.siteref_title") }}</div>
+                  <div class="mt-0.5 text-[10px] text-slate-400">{{ t("adhoc.siteref_hint") }}</div>
+                </div>
+                <div data-adhoc-siteref-preview class="hidden">
+                  <div class="relative inline-block">
+                    <img alt="Site-Ref Vorschau" class="block max-h-40 rounded shadow-sm cursor-crosshair" onclick="event.stopPropagation(); adhocSetPin(event, this);" />
+                    <span data-adhoc-siteref-pin class="pointer-events-none absolute hidden -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-red-600 shadow-lg ring-2 ring-red-400/60" style="width: 16px; height: 16px;"></span>
+                  </div>
+                  <div class="mt-1 text-[10px] text-slate-500" data-adhoc-siteref-name></div>
+                  <div class="mt-0.5 text-[10px] text-slate-400">{{ t("adhoc.siteref_pin") }}</div>
+                </div>
+                <input
+                  type="file" name="site_reference_file"
+                  accept="image/png,image/jpeg,image/webp"
+                  class="hidden"
+                  onchange="adhocOnSiteRefChange(this)"
+                  onclick="event.stopPropagation()"
+                />
+              </div>
+            </div>
+          </div>
+        </details>
+        <script>
+          // --- Helpers ---------------------------------------------------
+          // Assign a File-Objekt zu einem <input type=file>. Per Spec ist
+          // input.files read-only; mit DataTransfer geht's seit Chrome 73+.
+          function adhocAssignFileToInput(input, file) {
+            try {
+              const dt = new DataTransfer();
+              dt.items.add(file);
+              input.files = dt.files;
+              input.dispatchEvent(new Event('change', { bubbles: true }));
+              return true;
+            } catch (e) {
+              console.warn('[adhoc] DataTransfer-Assign fehlgeschlagen:', e);
+              return false;
+            }
+          }
+
+          // --- Main Input Image -----------------------------------------
+          function adhocAcceptDroppedFile(zone, file) {
+            if (!file) return;
+            const input = zone.querySelector('input[type=file]');
+            adhocAssignFileToInput(input, file);
+          }
+          function adhocOnInputImageChange(input) {
+            const f = input.files[0]; if (!f) return;
+            const zone = input.closest('[data-adhoc-input-zone]');
+            const empty = zone.querySelector('[data-dropzone-empty]');
+            const prev = zone.querySelector('[data-dropzone-preview]');
+            const img = prev.querySelector('img');
+            const name = prev.querySelector('[data-dropzone-name]');
+            img.src = URL.createObjectURL(f);
+            name.textContent = f.name;
+            empty.classList.add('hidden');
+            prev.classList.remove('hidden');
+          }
+
+          // --- Site-Reference -------------------------------------------
+          function adhocSiteRefZoneClick(event, zone) {
+            // Click auf das Vorschau-Bild setzt den Pin (via dessen
+            // eigenes onclick) und stoppt propagation. Click ueberall sonst
+            // im Drop-Bereich oeffnet den File-Dialog.
+            if (event.target.tagName === 'IMG') return;
+            zone.querySelector('input[type=file]').click();
+          }
+          function adhocAcceptDroppedSiteRef(zone, file) {
+            if (!file) return;
+            const input = zone.querySelector('input[type=file]');
+            adhocAssignFileToInput(input, file);
+          }
+          function adhocOnSiteRefChange(input) {
+            const f = input.files[0]; if (!f) return;
+            const zone = input.closest('[data-adhoc-siteref-zone]');
+            const empty = zone.querySelector('[data-adhoc-siteref-empty]');
+            const prev = zone.querySelector('[data-adhoc-siteref-preview]');
+            const img = prev.querySelector('img');
+            const name = prev.querySelector('[data-adhoc-siteref-name]');
+            img.src = URL.createObjectURL(f);
+            name.textContent = f.name;
+            empty.classList.add('hidden');
+            prev.classList.remove('hidden');
+            // Pin zuruecksetzen bei neuem Bild
+            const pin = zone.querySelector('[data-adhoc-siteref-pin]');
+            pin.classList.add('hidden');
+            const form = input.closest('form');
+            form.querySelector('input[name=site_reference_marker_x_pct]').value = '';
+            form.querySelector('input[name=site_reference_marker_y_pct]').value = '';
+          }
+          function adhocSetPin(event, img) {
+            const rect = img.getBoundingClientRect();
+            const x = (event.clientX - rect.left) / rect.width;
+            const y = (event.clientY - rect.top) / rect.height;
+            const zone = img.closest('[data-adhoc-siteref-zone]');
+            const pin = zone.querySelector('[data-adhoc-siteref-pin]');
+            pin.style.left = (x*100)+'%';
+            pin.style.top = (y*100)+'%';
+            pin.classList.remove('hidden');
+            const form = img.closest('form');
+            form.querySelector('input[name=site_reference_marker_x_pct]').value = x.toFixed(4);
+            form.querySelector('input[name=site_reference_marker_y_pct]').value = y.toFixed(4);
+          }
+
+          // --- Coords ---------------------------------------------------
+          function updateAdhocMapsLinks(form) {
+            const lat = form.querySelector('input[name=latitude_deg]').value.replace(',', '.').trim();
+            const lon = form.querySelector('input[name=longitude_deg]').value.replace(',', '.').trim();
+            const placeEl = form.querySelector('input[name=place_name]');
+            const place = placeEl ? placeEl.value.trim() : '';
+            const maps = form.querySelector('[data-adhoc-maps]');
+            const earth = form.querySelector('[data-adhoc-earth]');
+            if (!maps || !earth) return;
+            const validCoords = lat && lon && !isNaN(parseFloat(lat)) && !isNaN(parseFloat(lon));
+            // Links sind immer sichtbar; hier nur das Ziel setzen:
+            // Koordinaten -> exakter Punkt, sonst Ortsname -> Suche, sonst allgemein.
+            if (validCoords) {
+              maps.href = `https://www.google.com/maps?q=${lat},${lon}`;
+              earth.href = `https://earth.google.com/web/@${lat},${lon},800a,1500d,35y,0h,45t,0r`;
+            } else if (place) {
+              const q = encodeURIComponent(place);
+              maps.href = `https://www.google.com/maps/search/?api=1&query=${q}`;
+              earth.href = `https://earth.google.com/web/search/${q}`;
+            } else {
+              maps.href = 'https://www.google.com/maps';
+              earth.href = 'https://earth.google.com/web/';
+            }
+          }
+        </script>
+
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+            <label class="flex items-center gap-1">
+              <span>{{ t("opt.mode") }}</span>
+              <select name="mode" class="rounded border-slate-300 px-2 py-1 text-xs">
+                <option value="A" selected>{{ t("opt.mode_a") }}</option>
+                <option value="B">{{ t("opt.mode_b") }}</option>
+                <option value="C">{{ t("opt.mode_c") }}</option>
+                <option value="D">{{ t("opt.mode_d") }}</option>
+              </select>
+            </label>
+            <label class="flex items-center gap-1">
+              <span>{{ t("opt.language") }}</span>
+              <select name="validator_language" class="rounded border-slate-300 px-2 py-1 text-xs">
+                <option value="de" {% if ui_lang == 'de' %}selected{% endif %}>de</option>
+                <option value="it" {% if ui_lang == 'it' %}selected{% endif %}>it</option>
+              </select>
+            </label>
+            <label class="flex items-center gap-1">
+              <span>{{ t("opt.generator") }}</span>
+              <select
+                name="generator_model"
+                class="rounded border-slate-300 px-2 py-1 text-xs"
+                hx-on:change="
+                  const isNb2 = this.value.includes('gemini-3');
+                  const thinking = this.form.querySelector('[data-thinking-slot]');
+                  thinking.classList.toggle('hidden', !isNb2);
+                "
+              >
+                <option value="gemini-2.5-flash-image" selected>NB1 (gemini-2.5) · günstig</option>
+                <option value="gemini-3.1-flash-image-preview">NB2 (gemini-3.1)</option>
+                <option value="gpt-image-1">GPT (gpt-image-1) · teurer</option>
+              </select>
+            </label>
+            <label class="hidden items-center gap-1" data-thinking-slot>
+              <span>{{ t("opt.thinking") }}</span>
+              <select name="generator_thinking_budget" class="rounded border-slate-300 px-2 py-1 text-xs">
+                <option value="-1" selected>High (dynamic)</option>
+                <option value="0">Off</option>
+              </select>
+            </label>
+          </div>
+          <button
+            type="submit"
+            class="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {{ t("adhoc.render_btn") }}
+          </button>
+        </div>
+      </form>
+    </section>
+  </div>
+</div>
+{% endblock %}

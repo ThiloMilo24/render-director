@@ -1,0 +1,2 @@
+title: "Render Director"
+tooltip: "Ein Button, zwei Wege. A) Enscape-Render (BIM): findet den jüngsten Render im Enscape-Ordner, schreibt materials_legend.json + meta.json, verschiebt Beauty + Pass-Files in <Projekt>/Revit Render/<View>/ und öffnet das Tool. B) Ad-hoc (ohne Revit): direkt ein Bild hochladen und bearbeiten. Der Launcher startet die Webapp bei Bedarf selbst — kein manuelles uvicorn mehr."

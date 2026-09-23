@@ -1,0 +1,46 @@
+{# Root-Seite: füllt Sidebar mit Snapshot-Listing.
+
+   Wenn `?snapshot=Scene_06` als Query gesetzt ist, wird der Detail-View
+   direkt server-side gerendert (Reload-/Bookmark-/Side-Panel-Restart-
+   freundlich). Ohne Query: Empty-State mit Hinweis. #}
+{% extends "base.html" %}
+
+{% block sidebar %}
+  {% include "partials/sidebar.html" %}
+{% endblock %}
+
+{% block header_status %}
+  {% if project_dir %}
+    <span class="font-medium text-emerald-700" title="Projekt-Modus: {{ project_dir }}">
+      {{ project_display_name or 'Projekt' }}
+    </span>
+    <span class="mx-1 text-slate-300">·</span>
+  {% endif %}
+  {% if active_snapshot %}
+    <span class="font-medium text-slate-700">{{ active_snapshot }}</span>
+    <span class="mx-1 text-slate-300">·</span>
+    <span class="text-slate-400">localhost:8765</span>
+  {% else %}
+    <span class="text-slate-400">localhost:8765</span>
+  {% endif %}
+{% endblock %}
+
+{% block main %}
+<div id="main-pane" class="h-full">
+  {% if detail %}
+    {% include "partials/snapshot_detail.html" %}
+  {% else %}
+    <div class="flex h-full items-center justify-center p-6">
+      <div class="max-w-md text-center">
+        <div class="mx-auto mb-3 inline-flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-400">
+          ←
+        </div>
+        <h2 class="text-sm font-semibold text-slate-700">Snapshot wählen</h2>
+        <p class="mt-1 text-xs text-slate-500">
+          Klick links eine Scene an, um den Beauty-Render und das Iterations-Chat zu öffnen.
+        </p>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{
+  "project_name": "Demo House",
+  "project_type": "Wohnbau",
+  "location": "Innsbruck, Österreich (fiktiver Standort)",
+  "facade_orientation": "Süd-Südwest",
+  "materials": {
+    "Fassade": "Lärchenholz-Schalung vertikal, natur vergraut",
+    "Sockel": "Sichtbeton, glatt",
+    "Dach": "Zink Stehfalz, dunkelgrau",
+    "Fenster": "Holz-Alu, anthrazit, Dreifachverglasung",
+    "Außenboden": "Natursteinplatten, hell"
+  },
+  "camera_focal_length_mm": 24.0,
+  "camera_height_m": 1.7,
+  "time_of_day": "später Vormittag",
+  "site_context": {
+    "active": false,
+    "source": "none",
+    "neighbors_visible": false,
+    "notes": ""
+  },
+  "view_type": "exterior",
+  "site_location": {
+    "latitude_deg": 47.2692,
+    "longitude_deg": 11.4041,
+    "elevation_m": 574.0,
+    "time_zone_utc_offset_h": 1.0,
+    "place_name": "Innsbruck"
+  },
+  "notes": "Synthetische Demo-Szene (scripts/make_demo_assets.py). Weiße Volumen sind Enscape-Platzhalter für Nachbarbauten, Bäume und Berge."
+}

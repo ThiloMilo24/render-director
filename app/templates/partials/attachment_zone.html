@@ -1,0 +1,134 @@
+{# Drag-and-Drop-Zone + File-Picker für Per-Turn-Bild-Attachments.
+
+   Wird sowohl im Initial-Form (snapshot_detail.html) als auch in der
+   Iteration-Form jeder Chat-Bubble (chat_iteration.html) eingebunden.
+
+   Multi-File-Support, max 3 Bilder. Live-Thumbnails mit Klick-zum-
+   Entfernen. Optionaler Beschreibungs-Textfeld.
+
+   Erwartet beim Include eine eindeutige `zone_id`-Variable (z.B.
+   "init" für Initial-Form, oder "iter-{{ run_id }}" für Iteration-
+   Formen), damit IDs eindeutig sind, wenn mehrere Zonen gleichzeitig
+   im DOM existieren.
+
+   Form-Encoding: das Form muss enctype="multipart/form-data" haben,
+   damit File-Uploads durchgehen. #}
+<div class="space-y-2">
+  <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+    {{ t("att.title") }}
+  </div>
+
+  {# Drop-Zone — klickbar als Picker, drag-over toggelt CSS-Klasse via JS. #}
+  <label
+    id="dropzone-{{ zone_id }}"
+    class="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-center text-xs text-slate-500 transition hover:border-slate-400 hover:bg-slate-100"
+  >
+    <input
+      id="filepicker-{{ zone_id }}"
+      type="file"
+      name="attachments"
+      accept="image/*"
+      multiple
+      class="hidden"
+    />
+    <span>{{ t("att.drop") }}</span>
+    <span class="text-[10px] text-slate-400">{{ t("att.hint") }}</span>
+  </label>
+
+  {# Thumbnail-Vorschau-Container — wird von JS gefüllt. #}
+  <div
+    id="thumbs-{{ zone_id }}"
+    class="hidden grid-cols-3 gap-2"
+  ></div>
+
+  <textarea
+    name="attachment_description"
+    rows="1"
+    class="block w-full rounded-md border border-slate-300 px-3 py-1.5 text-xs shadow-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500"
+    placeholder="{{ t('att.desc_ph') }}"
+  ></textarea>
+</div>
+
+<script>
+(function() {
+  const zoneId = "{{ zone_id }}";
+  const MAX_FILES = 3;
+  const dropzone = document.getElementById("dropzone-" + zoneId);
+  const picker = document.getElementById("filepicker-" + zoneId);
+  const thumbs = document.getElementById("thumbs-" + zoneId);
+  if (!dropzone || !picker || !thumbs) return;
+
+  // Drag-Over visual feedback
+  ["dragenter", "dragover"].forEach(ev => {
+    dropzone.addEventListener(ev, e => {
+      e.preventDefault();
+      dropzone.classList.add("border-slate-600", "bg-slate-100");
+    });
+  });
+  ["dragleave", "drop"].forEach(ev => {
+    dropzone.addEventListener(ev, e => {
+      e.preventDefault();
+      dropzone.classList.remove("border-slate-600", "bg-slate-100");
+    });
+  });
+
+  dropzone.addEventListener("drop", e => {
+    const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith("image/"));
+    addFiles(files);
+  });
+  picker.addEventListener("change", e => {
+    addFiles(Array.from(picker.files));
+  });
+
+  function addFiles(newFiles) {
+    // DataTransfer trick: rebuild FileList from current picker + new files,
+    // capped at MAX_FILES.
+    const dt = new DataTransfer();
+    const existing = Array.from(picker.files || []);
+    [...existing, ...newFiles].slice(0, MAX_FILES).forEach(f => dt.items.add(f));
+    picker.files = dt.files;
+    renderThumbs();
+  }
+
+  function removeFile(idx) {
+    const dt = new DataTransfer();
+    Array.from(picker.files).forEach((f, i) => { if (i !== idx) dt.items.add(f); });
+    picker.files = dt.files;
+    renderThumbs();
+  }
+
+  function renderThumbs() {
+    thumbs.innerHTML = "";
+    const files = Array.from(picker.files || []);
+    if (files.length === 0) {
+      thumbs.classList.add("hidden");
+      thumbs.classList.remove("grid");
+      return;
+    }
+    thumbs.classList.remove("hidden");
+    thumbs.classList.add("grid");
+    files.forEach((f, i) => {
+      const wrap = document.createElement("div");
+      wrap.className = "relative aspect-square overflow-hidden rounded-md border border-slate-200 bg-slate-100";
+      const img = document.createElement("img");
+      img.className = "h-full w-full object-cover";
+      img.src = URL.createObjectURL(f);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900/80 text-xs text-white hover:bg-slate-900";
+      btn.title = "Entfernen";
+      btn.textContent = "✕";
+      btn.addEventListener("click", () => removeFile(i));
+      wrap.appendChild(img);
+      wrap.appendChild(btn);
+      thumbs.appendChild(wrap);
+    });
+  }
+
+  // Bei Form-Reset (z.B. Ad-hoc-Form nach erfolgreichem Submit ruft
+  // this.reset()) die Thumbnails leeren. Snapshot-Formen resetten nicht,
+  // dort feuert dieser Listener nie — harmlos.
+  const _form = picker.closest("form");
+  if (_form) _form.addEventListener("reset", () => setTimeout(renderThumbs, 0));
+})();
+</script>

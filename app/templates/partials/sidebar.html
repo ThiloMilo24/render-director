@@ -1,0 +1,91 @@
+{# Sidebar-Inhalt: Liste aller Snapshots aus settings.snapshot_root.
+
+   Jedes Item ist via htmx ein "Klick → Detail-Snippet in #main-pane laden".
+   Server-side gerendert beim ersten Seitenaufruf, sodass der erste
+   Eindruck ohne JS-Roundtrip funktioniert.
+
+   Active-State via data-active-Attribut:
+   - Initial-Paint: Jinja setzt data-active="true" beim Server-Render
+     wenn `?snapshot=X` mit dem View matched.
+   - Bei Klick: hx-on:click toggelt das Attribut clientseitig sofort,
+     damit der Highlight ohne Sidebar-Refresh mitspringt.
+   - Tailwind data-[active=true]:-Modifier macht den visuellen Wechsel. #}
+<div class="p-3">
+  {# --- Letzte Projekte ---------------------------------------------------
+     Liste der zuletzt aktiven Revit-Projekte (per ~/.render_director/
+     recent_projects.json). Wird bei jedem Page-Load mit ?project_dir=…
+     aktualisiert. Klick = wechselt project_dir, Sidebar laedt neu mit
+     den Views dieses Projekts. Aktives Projekt highlighted.            #}
+  {% if recent_projects %}
+  <h2 class="mb-2 flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
+    <span>Letzte Projekte</span>
+    <span class="ml-auto rounded bg-slate-200 px-1.5 py-0.5 text-[10px] text-slate-600">{{ recent_projects|length }}</span>
+  </h2>
+  <ul class="mb-4 space-y-0.5 border-b border-slate-200 pb-3">
+    {% for rp in recent_projects %}
+    {% set is_active_proj = project_dir == rp.project_dir %}
+    <li>
+      <a
+        href="/{% if active_tab == 'adhoc' %}adhoc{% endif %}?project_dir={{ rp.project_dir|urlencode }}"
+        data-active="{{ 'true' if is_active_proj else 'false' }}"
+        class="group flex flex-col rounded-md px-2.5 py-1.5 text-left text-xs transition
+               hover:bg-slate-100
+               data-[active=true]:bg-emerald-50
+               data-[active=true]:ring-1 data-[active=true]:ring-emerald-200"
+        title="{{ rp.project_dir }}"
+      >
+        <span class="truncate font-medium text-slate-900 group-data-[active=true]:text-emerald-800">{{ rp.project_name }}</span>
+        {% if rp.last_used %}
+        <span class="text-[10px] text-slate-400">{{ rp.last_used[:10] }}</span>
+        {% endif %}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <h2 class="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+    Snapshots
+  </h2>
+  {% if snapshots %}
+  <ul class="space-y-0.5">
+    {% for snap in snapshots %}
+    {% set is_active = active_snapshot == snap.view %}
+    <li>
+      <button
+        type="button"
+        data-active="{{ 'true' if is_active else 'false' }}"
+        class="group flex w-full flex-col rounded-md px-3 py-2 text-left text-sm transition
+               hover:bg-slate-100 focus:bg-slate-100 focus:outline-none
+               data-[active=true]:bg-slate-900
+               data-[active=true]:hover:bg-slate-900
+               data-[active=true]:shadow-sm"
+        hx-get="/ui/snapshot/{{ snap.view }}{% if project_dir %}?project_dir={{ project_dir|urlencode }}{% endif %}"
+        hx-target="#main-pane"
+        hx-swap="innerHTML"
+        hx-push-url="/?snapshot={{ snap.view }}{% if project_dir %}&project_dir={{ project_dir|urlencode }}{% endif %}"
+        hx-on:click="this.closest('ul').querySelectorAll('button').forEach(b => b.setAttribute('data-active', 'false')); this.setAttribute('data-active', 'true');"
+      >
+        <span class="font-medium text-slate-900 group-data-[active=true]:text-white">{{ snap.view }}</span>
+        <span class="text-xs text-slate-500 group-data-[active=true]:text-slate-300">
+          {{ snap.project_name }}
+          <span class="mx-1 text-slate-300 group-data-[active=true]:text-slate-500">·</span>
+          {{ snap.view_type }}
+          {% if snap.has_reference %}
+          <span class="ml-1 inline-flex items-center rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-700
+                       group-data-[active=true]:bg-amber-200 group-data-[active=true]:text-amber-900">
+            Ref
+          </span>
+          {% endif %}
+          {% if snap.n_runs %}
+          <span class="ml-1 text-slate-400">· {{ snap.n_runs }} Runs</span>
+          {% endif %}
+        </span>
+      </button>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="text-sm text-slate-400">Keine Snapshots in {{ snapshot_root }} gefunden.</p>
+  {% endif %}
+</div>

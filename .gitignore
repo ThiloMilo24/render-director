@@ -1,0 +1,62 @@
+# Secrets
+.env
+.env.*
+!.env.example
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# uv / virtualenv
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Runtime-Logs (Launcher startet uvicorn -> logs/webapp.log)
+logs/
+
+# Claude Code local settings
+.claude/
+
+# Lokaler Ablage-Ordner für Material, das nicht ins Repo gehört
+Publish/
+
+# Gepackte Builds / Zips. Können Referenzfotos oder eine .env enthalten.
+dist/
+*.zip
+
+# ----------------------------------------------------------------------
+# Lokale Daten: Struktur sichtbar halten, Inhalte ignorieren
+# ----------------------------------------------------------------------
+
+# Scenes (Renderings, meta.json) ...
+data/scenes/*/
+!data/scenes/*/README.md
+!data/scenes/*/.gitkeep
+
+# Generierte Runs ...
+data/generations/*
+!data/generations/.gitkeep
+!data/generations/README.md
+
+# Ad-hoc-Runs, falls RENDER_ADHOC_ROOT ins Repo zeigt ...
+data/adhoc/
+
+# Referenzbibliothek mit Projektfotos (gross, Bildrechte) ...
+data/reference_library/*
+!data/reference_library/README.md
